@@ -1,31 +1,26 @@
 # 지수만들기
 # 0. 대상 코드 입력
 # 1. 맵핑 정보 가져오기
-# 2. 지수생성 (동일가중)
-# 3. 모멘텀시그널
-# 4. 수익률 산출
+# 2. 지수생성
+# 3. 구성종목 조회
+# 4. 시각화
 
 import pandas as pd
 import requests
 import re
 import FinanceDataReader as fdr
-import matplotlib.pyplot as plt
-import datetime
-import numpy as np
+import random
 import warnings
 warnings.filterwarnings(action='ignore')
 
-start_date = '20191114'
+start_date = '20201114'
 end_date = '20211114'
-selected_num = 2
-lookback_m = 1
+num = '128'
 df_krx = fdr.StockListing('KRX')
 
-bm = pd.DataFrame(fdr.DataReader('148020', start_date, end_date)['Close'])
-
-
 # 0. 대상 코드 입력
-thema_info = {496: '골프',
+thema_info = {
+              496: '골프',
               492: 'NFT',
               503: 'LFP/리튬인산철',
               44 : '시멘트/레미콘',
@@ -65,61 +60,55 @@ def get_thema_idx(thema_info, df_krx) :
     idx = pd.DataFrame()
     for key,value in thema_info.items():
         code_list = get_thema_code(key)
-        df = pd.DataFrame()
+        stx = pd.DataFrame()
         for i in range(0, len(code_list)) :
-            df_temp = pd.DataFrame(fdr.DataReader(code_list[i], start_date, end_date)['Close'])
+            stx_temp = pd.DataFrame(fdr.DataReader(code_list[i], start_date, end_date)['Close'])
             code_info = df_krx[df_krx['Symbol'].isin(code_list)]
-            df_temp.columns = code_info[code_info['Symbol']==code_list[i]].Name
-            df = pd.concat([df,df_temp], axis= 1)
-        df = df.pct_change().fillna(0)
-        idx_temp = pd.DataFrame(df.sum(axis=1)/len(df.columns), index = df.index, columns= [value])
+            stx_temp.columns = code_info[code_info['Symbol']==code_list[i]].Name
+            stx = pd.concat([stx,stx_temp], axis= 1)
+        stx = stx.pct_change().fillna(0)
+        idx_temp = pd.DataFrame(stx.sum(axis=1)/len(stx.columns), index = stx.index, columns= [value])
         idx = pd.concat([idx,idx_temp], axis =1)
     cum_idx = (1 + idx).cumprod() - 1
     return cum_idx, idx
 
 cum_idx, idx = get_thema_idx(thema_info, df_krx)
 
-# 3. 모멘텀 시그널 생성
-def get_rm_signal(cum_idx, lookback_m, selected_num) :
-    month_list = cum_idx.index.map(lambda x : datetime.datetime.strftime(x, '%Y-%m')).unique()
-    rebal_date= pd.DataFrame()
-    for m in month_list:
-        rebal_date = rebal_date.append(cum_idx[cum_idx.index.map(lambda x : datetime.datetime.strftime(x, '%Y-%m')) == m].iloc[-1])
-    rebal_date = rebal_date - rebal_date.shift(lookback_m).fillna(0)
-    signal_m = pd.DataFrame((rebal_date.rank(axis=1, ascending = False) <= selected_num).applymap(lambda x : '1' if x == True else '0'))
-    signal_m = signal_m.shift(1).fillna(0)
-    return signal_m
+# 3. PDF 구성종목 조회
+def get_pdf_stat(num) :
+    pdf_info = df_krx[df_krx['Symbol'].isin(get_thema_code(num))]
+    stx = pd.DataFrame()
+    for i in range(0, len(pdf_info)) :
+        stx_temp = pd.DataFrame(fdr.DataReader(pdf_info.iloc[i].Symbol, start_date, end_date)['Close'])
+        stx_temp.columns = [pdf_info.iloc[i].Name]
+        stx = pd.concat([stx,stx_temp], axis= 1)
+    stx = stx.pct_change().fillna(0)
+    cum_stx = (1 + stx).cumprod() - 1
+    return pdf_info, cum_stx
 
-signal_m = get_rm_signal(cum_idx, lookback_m, selected_num)
+pdf_info, cum_stx = get_pdf_stat(num)
 
-# 4. 수익률 산출
-def get_rm_return(idx,signal_m) :
-    idx = idx.rename_axis('Date').reset_index()
-    idx['Date'] = pd.to_datetime(idx['Date'])
-    idx['YYYY-MM'] = idx['Date'].map(lambda x : datetime.datetime.strftime(x, '%Y-%m'))
-    signal_m['YYYY-MM'] =signal_m.index.map(lambda x : datetime.datetime.strftime(x, '%Y-%m'))
-    signal_d = pd.merge(idx[['Date','YYYY-MM']], signal_m, on = 'YYYY-MM', how = 'left')
-    signal_d.set_index(['Date'],inplace=True)
-    signal_d = signal_d[thema_info.values()].astype(float)
-    idx.set_index(['Date'],inplace=True)
-    result = pd.DataFrame(((signal_d * idx) * 1 / selected_num).sum(axis=1))
-    return result, signal_d
+# 4. 시각화
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+font_location = 'C:/Windows/Fonts/NanumGothic.ttf'
+font_name = fm.FontProperties(fname=font_location).get_name()
+plt.rc('font', family=font_name)
 
-result = get_rm_return(idx,signal_m)[0]
-signal_d = get_rm_return(idx,signal_m)[1]
 
-# Cumulative Compounded Returns for Momentum
-plt.figure(figsize=(17,7))
-plt.title('Relative Momentum Return')
-plt.plot((1 + result).cumprod() - 1, label = 'Momentum')
-plt.plot((1 + bm['Close'].pct_change().fillna(0)).cumprod() - 1, label = 'BenchMark')
+# Cumulative Compounded Returns for Thema Index
+plt.figure(figsize = (20,10))
+for i in range(1,len(cum_idx.columns)) :
+    plt.legend(
+        handles=(plt.plot(cum_idx.iloc[:,i-1]*100, label = cum_idx.columns[i-1],
+                 color = "#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)]))))
 plt.legend()
-plt.show()
 
-# Cross-Sectional Weights
-plt.figure(figsize=(17,7))
-plt.title('Cross-Sectional Weights')
-plt.stackplot(signal_d.index, np.transpose(signal_d),labels = signal_d.columns)
+
+# Cumulative Compounded Returns for Individual Stock
+plt.figure(figsize = (20,10))
+for i in range(1,len(cum_stx.columns)) :
+    plt.legend(
+        handles=(plt.plot(cum_stx.iloc[:,i-1]*100, label = cum_stx.columns[i-1],
+                 color = "#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)]))))
 plt.legend()
-plt.show()
-
