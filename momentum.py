@@ -4,7 +4,6 @@
 # 2. 지수생성
 # 3. 모멘텀 시그널 생성
 # 4. 수익률 산출
-# 5. 시각화
 
 import pandas as pd
 import requests
@@ -111,7 +110,6 @@ def get_rm_return(idx,signal_m) :
 result = get_rm_return(idx,signal_m)[0]
 signal_d = get_rm_return(idx,signal_m)[1]
 
-# 5. 수익률 산출
 # Cumulative Compounded Returns for Momentum
 plt.figure(figsize=(17,7))
 plt.title('Relative Momentum Return')
