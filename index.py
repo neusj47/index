@@ -19,7 +19,7 @@ num = '128'
 df_krx = fdr.StockListing('KRX')
 
 # 0. 대상 코드 입력
-thema_info = {
+theme_info = {
               496: '골프',
               492: 'NFT',
               503: 'LFP/리튬인산철',
@@ -43,7 +43,7 @@ thema_info = {
              }
 
 # 1. 맵핑 정보 가져오기
-def get_thema_code(num) :
+def get_theme_code(num) :
     thema_url = 'https://m.infostock.co.kr/sector/sector_detail.asp?code=' + str(num) + ''
     thema_page = requests.get(thema_url)
     code_list = []
@@ -56,10 +56,10 @@ def get_thema_code(num) :
     return code_list
 
 # 2. 지수 생성
-def get_thema_idx(thema_info, df_krx) :
+def get_theme_idx(theme_info, df_krx) :
     idx = pd.DataFrame()
-    for key,value in thema_info.items():
-        code_list = get_thema_code(key)
+    for key,value in theme_info.items():
+        code_list = get_theme_code(key)
         stx = pd.DataFrame()
         for i in range(0, len(code_list)) :
             stx_temp = pd.DataFrame(fdr.DataReader(code_list[i], start_date, end_date)['Close'])
@@ -72,11 +72,11 @@ def get_thema_idx(thema_info, df_krx) :
     cum_idx = (1 + idx).cumprod() - 1
     return cum_idx, idx
 
-cum_idx, idx = get_thema_idx(thema_info, df_krx)
+cum_idx, idx = get_theme_idx(theme_info, df_krx)
 
 # 3. PDF 구성종목 조회
 def get_pdf_stat(num) :
-    pdf_info = df_krx[df_krx['Symbol'].isin(get_thema_code(num))]
+    pdf_info = df_krx[df_krx['Symbol'].isin(get_theme_code(num))]
     stx = pd.DataFrame()
     for i in range(0, len(pdf_info)) :
         stx_temp = pd.DataFrame(fdr.DataReader(pdf_info.iloc[i].Symbol, start_date, end_date)['Close'])
