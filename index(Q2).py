@@ -7,10 +7,13 @@
 import requests
 import pandas as pd
 import datetime
-
+from pykrx import stock
+import FinanceDataReader as fdr
 
 file_path = "C:/Users/sjyoo/Desktop/path/"
 today = datetime.datetime.now().strftime('%Y-%m-%d')
+
+stddate = '20211123'
 
 
 # 0. 대상 지수 입력
@@ -92,3 +95,26 @@ def get_holdings(fn_theme) :
     return df
 
 df = get_holdings(fn_theme)
+
+def stock_info(df,stddate) :
+    df_mkt = stock.get_market_cap_by_ticker(stddate).reset_index().rename(columns = {'티커':'Code'})
+    df = pd.merge(df, df_mkt, how = 'inner', on ='Code')
+    df_temp = pd.DataFrame(df.groupby('Theme').apply(lambda x : x.시가총액/x.시가총액.sum())).reset_index().set_index('level_1')['시가총액']
+    df = pd.merge(df, df_temp, left_index=True, right_index=True,how='left')
+    df_stk = df.rename(columns = {'종가':'Price_Adj','시가총액_x':'Marketcap','거래량':'TQty','거래대금':'TAmt','상장주식수':'Qty','시가총액_y':'Wgt'})
+    return df_stk
+
+df_stk = stock_info(df,stddate)
+
+
+theme_list = df_stk.Theme.unique().tolist()
+for s in range(0,len(theme_list)):
+    df_theme = df_stk[df_stk['Theme'] == theme_list[s]]
+    code_list = df_theme.Code.tolist()
+    wgt_list = df_theme.Wgt.tolist()
+    stk = pd.DataFrame()
+    for i in range(0, len(code_list)):
+        stk_temp =  pd.DataFrame(fdr.DataReader(code_list[i], '20211122', stddate)['Close'])
+        stk = pd.concat([stk,stk_temp], axis= 1)
+    stk = stk.pct_change().dropna(axis=0)
+print(theme_list[s], sum(stk.iloc[0] * wgt_list))
