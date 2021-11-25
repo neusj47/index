@@ -105,12 +105,12 @@ def get_index_wgt(df,stddate) :
     df_wgt = df.rename(columns = {'종가':'Price_Adj','시가총액_x':'Marketcap','거래량':'TQty','거래대금':'TAmt','상장주식수':'Qty','시가총액_y':'Wgt'})
     return df_wgt
 
-df_stk = stock_info(df,stddate)
+df_wgt = get_index_wgt(df,stddate)
 
 
-theme_list = df_stk.Theme.unique().tolist()
+theme_list = df_wgt.Theme.unique().tolist()
 for s in range(0,len(theme_list)):
-    df_theme = df_stk[df_stk['Theme'] == theme_list[s]]
+    df_theme = df_wgt[df_wgt['Theme'] == theme_list[s]]
     code_list = df_theme.Code.tolist()
     wgt_list = df_theme.Wgt.tolist()
     stk = pd.DataFrame()
