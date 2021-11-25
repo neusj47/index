@@ -1,20 +1,25 @@
 # 지수만들기
 # 0. 대상 지수 입력
-# 1. Constituents 가져오기
-# 2. 지수 생성
-# 3. 시각화
+# 1. Holdings 가져오기
+# 2. wgt 생성하기
+# 3. 지수 생성
+# 4. DB 저장
 
 import requests
 import pandas as pd
-import datetime
+from datetime import datetime, timedelta
 from pykrx import stock
 import FinanceDataReader as fdr
+import numpy as np
+import pymysql
+from sqlalchemy import create_engine
+import mariadb
 
 file_path = "C:/Users/ysj/Desktop/path/"
-today = datetime.datetime.now().strftime('%Y-%m-%d')
+today = datetime.now().strftime('%Y-%m-%d')
 
-stddate = '20211123'
-
+stddate = '20211125'
+prevbdate = stock.get_nearest_business_day_in_a_week(datetime.strftime(datetime.strptime(stddate, "%Y%m%d") - timedelta(days=1), "%Y%m%d"))
 
 # 0. 대상 지수 입력
 fn_theme = {
@@ -77,11 +82,11 @@ def get_holdings(fn_theme) :
     df = pd.DataFrame()
     for key,value in fn_theme.items() :
         try:
-            file_name_theme = theme_url.format(key, value).split('/')[-3].split('%20')[1] +'.xlsx'
-            with open(file_path + file_name_theme, 'wb') as file:
-                response = requests.get(theme_url.format(key, value))
-                if response.status_code == 200:
-                    file.write(response.content)
+            # file_name_theme = theme_url.format(key, value).split('/')[-3].split('%20')[1] +'.xlsx'
+            # with open(file_path + file_name_theme, 'wb') as file:
+            #     response = requests.get(theme_url.format(key, value))
+            #     if response.status_code == 200:
+            #         file.write(response.content)
             df_temp = pd.read_excel(file_path +"{}.xlsx".format(value), sheet_name = 'Constituents', index_col=0).fillna(0)
             df_temp = df_temp.iloc[6:len(df_temp)]
             df_temp['theme'] = value
@@ -97,7 +102,8 @@ def get_holdings(fn_theme) :
 
 df = get_holdings(fn_theme)
 
-def get_index_wgt(df,stddate) :
+# 2. wgt 생성하기
+def get_stk_wgt(df,stddate) :
     df_mkt = stock.get_market_cap_by_ticker(stddate).reset_index().rename(columns = {'티커':'Code'})
     df = pd.merge(df, df_mkt, how = 'inner', on ='Code')
     df_temp = pd.DataFrame(df.groupby('Theme').apply(lambda x : x.시가총액/x.시가총액.sum())).reset_index().set_index('level_1')['시가총액']
@@ -105,17 +111,68 @@ def get_index_wgt(df,stddate) :
     df_wgt = df.rename(columns = {'종가':'Price_Adj','시가총액_x':'Marketcap','거래량':'TQty','거래대금':'TAmt','상장주식수':'Qty','시가총액_y':'Wgt'})
     return df_wgt
 
-df_wgt = get_index_wgt(df,stddate)
+df_wgt = get_stk_wgt(df,stddate)
+
+# 3. 지수 생성
+# def get_idx(df_wgt,stddate,prevbdate) :
+#     theme_list = df_wgt.Theme.unique().tolist()
+#     # df_idx = pd.DataFrame(index=np.arange(start=0, stop=len(theme_list)), columns=['Last_Update', 'Theme', 'Rtn'])
+#     df_idx = pd.DataFrame()
+#     for s in range(0,len(theme_list)):
+#         df_theme = df_wgt[df_wgt['Theme'] == theme_list[s]]
+#         code_list = df_theme.Code.tolist()
+#         wgt_list = df_theme.Wgt.tolist()
+#         stk = pd.DataFrame()
+#         for i in range(0, len(code_list)):
+#             stk_temp =  pd.DataFrame(fdr.DataReader(code_list[i], prevbdate, stddate)['Close'])
+#             stk = pd.concat([stk,stk_temp], axis= 1)
+#         stk = stk.pct_change().dropna(axis=0)
+#         # df_idx.iloc[s].Last_Update = stddate
+#         # df_idx.iloc[s].Theme = theme_list[s]
+#         # df_idx.iloc[s].Rtn = sum(stk.iloc[0] * wgt_list)
+#         df_idx_temp = pd.DataFrame(sum(stk.iloc[0] * wgt_list), index=[stddate], columns=[theme_list[s]])
+#         df_idx = pd.concat([df_idx, df_idx_temp], axis=1)
+#     return df_idx
+#
+# get_idx = get_idx(df_wgt,stddate,prevbdate)
+
+def get_idx_DB(df_wgt,stddate,prevbdate) :
+    theme_list = df_wgt.Theme.unique().tolist()
+    df_idx = pd.DataFrame(index=np.arange(start=0, stop=len(theme_list)), columns=['Last_Update', 'Theme', 'Rtn'])
+    # df_idx = pd.DataFrame()
+    for s in range(0,len(theme_list)):
+        df_theme = df_wgt[df_wgt['Theme'] == theme_list[s]]
+        code_list = df_theme.Code.tolist()
+        wgt_list = df_theme.Wgt.tolist()
+        stk = pd.DataFrame()
+        for i in range(0, len(code_list)):
+            stk_temp =  pd.DataFrame(fdr.DataReader(code_list[i], prevbdate, stddate)['Close'])
+            stk = pd.concat([stk,stk_temp], axis= 1)
+        stk = stk.pct_change().dropna(axis=0)
+        df_idx.iloc[s].Last_Update = stddate
+        df_idx.iloc[s].Theme = theme_list[s]
+        df_idx.iloc[s].Rtn = sum(stk.iloc[0] * wgt_list)
+        # df_idx_temp = pd.DataFrame(sum(stk.iloc[0] * wgt_list), index=[stddate], columns=[theme_list[s]])
+        # df_idx = pd.concat([df_idx, df_idx_temp], axis=1)
+    return df_idx
+
+idx_DB = get_idx_DB(df_wgt,stddate,prevbdate)
 
 
-theme_list = df_wgt.Theme.unique().tolist()
-for s in range(0,len(theme_list)):
-    df_theme = df_wgt[df_wgt['Theme'] == theme_list[s]]
-    code_list = df_theme.Code.tolist()
-    wgt_list = df_theme.Wgt.tolist()
-    stk = pd.DataFrame()
-    for i in range(0, len(code_list)):
-        stk_temp =  pd.DataFrame(fdr.DataReader(code_list[i], '20211122', stddate)['Close'])
-        stk = pd.concat([stk,stk_temp], axis= 1)
-    stk = stk.pct_change().dropna(axis=0)
-print(theme_list[s], sum(stk.iloc[0] * wgt_list))
+# 4. DB 저장
+conn = ''
+engine = ''
+
+cursor = conn.cursor()
+sql = """
+CREATE TABLE IF NOT EXISTS daily_idx_rtn (
+Last_Update Date,
+Theme varchar(100),
+Rtn float,
+PRIMARY KEY (Last_Update, Theme)
+)
+"""
+cursor.execute(sql)
+conn.commit()
+
+idx_DB.to_sql(name='daily_idx_rtn', con = engine , if_exists='append', index=False)
