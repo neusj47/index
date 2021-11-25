@@ -10,7 +10,7 @@ import datetime
 from pykrx import stock
 import FinanceDataReader as fdr
 
-file_path = "C:/Users/sjyoo/Desktop/path/"
+file_path = "C:/Users/ysj/Desktop/path/"
 today = datetime.datetime.now().strftime('%Y-%m-%d')
 
 stddate = '20211123'
@@ -92,17 +92,18 @@ def get_holdings(fn_theme) :
             df = df.append(df_temp)
         except Exception as e:
              print(key, value, '오류발생', '오류:', str(e))
+    df.Code = df.Code.str.split('A').str[1]
     return df
 
 df = get_holdings(fn_theme)
 
-def stock_info(df,stddate) :
+def get_index_wgt(df,stddate) :
     df_mkt = stock.get_market_cap_by_ticker(stddate).reset_index().rename(columns = {'티커':'Code'})
     df = pd.merge(df, df_mkt, how = 'inner', on ='Code')
     df_temp = pd.DataFrame(df.groupby('Theme').apply(lambda x : x.시가총액/x.시가총액.sum())).reset_index().set_index('level_1')['시가총액']
     df = pd.merge(df, df_temp, left_index=True, right_index=True,how='left')
-    df_stk = df.rename(columns = {'종가':'Price_Adj','시가총액_x':'Marketcap','거래량':'TQty','거래대금':'TAmt','상장주식수':'Qty','시가총액_y':'Wgt'})
-    return df_stk
+    df_wgt = df.rename(columns = {'종가':'Price_Adj','시가총액_x':'Marketcap','거래량':'TQty','거래대금':'TAmt','상장주식수':'Qty','시가총액_y':'Wgt'})
+    return df_wgt
 
 df_stk = stock_info(df,stddate)
 
