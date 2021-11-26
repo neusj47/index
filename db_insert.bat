@@ -1,0 +1,1 @@
+python C:\Users\ysj\PycharmProjects\index\db_insert.py
