@@ -12,14 +12,15 @@ from pykrx import stock
 import FinanceDataReader as fdr
 import numpy as np
 import pymysql
-
+from sqlalchemy import create_engine
+import mariadb
 
 file_path = "C:/Users/ysj/Desktop/path/"
 today = datetime.now().strftime('%Y-%m-%d')
 
 stddate = '20211124'
 prevbdate = stock.get_nearest_business_day_in_a_week(datetime.strftime(datetime.strptime(stddate, "%Y%m%d") - timedelta(days=1), "%Y%m%d"))
-conn = pymysql.connect(host='localhost', user='root', password='sjyoo1~', db='domestic', charset='utf8')
+conn = ''
 
 # 0. 대상 지수 입력
 fn_theme = {
@@ -114,7 +115,6 @@ def get_stk_wgt(df,stddate) :
 df_wgt = get_stk_wgt(df,stddate)
 
 # 3. 지수 생성
-
 # def get_idx(df_wgt,stddate,prevbdate) :
 #     theme_list = df_wgt.Theme.unique().tolist()
 #     # df_idx = pd.DataFrame(index=np.arange(start=0, stop=len(theme_list)), columns=['Last_Update', 'Theme', 'Rtn'])
@@ -135,7 +135,7 @@ df_wgt = get_stk_wgt(df,stddate)
 #         df_idx = pd.concat([df_idx, df_idx_temp], axis=1)
 #     return df_idx
 #
-# df_idx = get_idx(df_wgt,stddate,prevbdate)
+# get_idx = get_idx(df_wgt,stddate,prevbdate)
 
 def get_idx_DB(df_wgt,stddate,prevbdate) :
     theme_list = df_wgt.Theme.unique().tolist()
