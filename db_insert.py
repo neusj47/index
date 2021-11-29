@@ -10,7 +10,7 @@ from threading import Timer
 
 class DBUpdater:
     def __init__(self):
-        self.conn = ''
+        self.conn = pymysql.connect(host='localhost', user='root', password='sjyoo1~', db='domestic', charset='utf8')
         with self.conn.cursor() as curs:
             sql = """
                   CREATE TABLE IF NOT EXISTS daily_idx_rtn (

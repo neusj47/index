@@ -11,12 +11,14 @@ import re
 import FinanceDataReader as fdr
 import random
 import warnings
+import datetime
 warnings.filterwarnings(action='ignore')
 
 start_date = '20201114'
-end_date = '20211114'
-num = '128'
+end_date = '20211129'
+num = '152'
 df_krx = fdr.StockListing('KRX')
+tgt_n = 5
 
 # 0. 대상 코드 입력
 theme_info = {
@@ -88,7 +90,47 @@ def get_pdf_stat(num) :
 
 pdf_info, cum_stx = get_pdf_stat(num)
 
-# 4. 시각화
+
+# 4. Top 종목 월별 성과
+def get_top_pick(num, start_date, end_date, tgt_n) :
+    code_list = get_theme_code(num)
+    stk = pd.DataFrame()
+    for i in range(0, len(code_list)):
+        stk_temp = pd.DataFrame(fdr.DataReader(code_list[i], start_date, end_date)['Close'])
+        code_info = df_krx[df_krx['Symbol'].isin(code_list)]
+        stk_temp.columns = code_info[code_info['Symbol'] == code_list[i]].Name
+        stk = pd.concat([stk, stk_temp], axis=1)
+    month_list = stk.index.map(lambda x: datetime.datetime.strftime(x, '%Y-%m')).unique()
+    rebal_date = pd.DataFrame()
+    for m in month_list:
+        rebal_date = rebal_date.append(
+            stk[stk.index.map(lambda x: datetime.datetime.strftime(x, '%Y-%m')) == m].iloc[-1])
+    rebal_date = rebal_date / rebal_date.shift(1) - 1
+    rebal_date = rebal_date.fillna(0)
+    rebal_date = rebal_date[1:len(rebal_date)]
+    signal_m = pd.DataFrame((rebal_date.rank(axis=1, ascending=False) <= tgt_n).applymap(lambda x: '1' if x == True else '0'))
+    df_stk = pd.DataFrame(index=signal_m.index, columns=list(range(1, tgt_n + 1)))
+    df_rtn = pd.DataFrame(index=signal_m.index, columns=list(range(1, tgt_n + 1)))
+    for s in range(0, len(signal_m)):
+        df_stk.iloc[s] = signal_m.columns[signal_m.iloc[s] == '1']
+        df_rtn.iloc[s] = rebal_date[signal_m.columns[signal_m.iloc[s] == '1']].iloc[s]
+    df_rtn_t = pd.DataFrame(columns=signal_m.index)
+    df_stk_t = pd.DataFrame(columns=signal_m.index)
+    for i in range(0, len(df_rtn)):
+        df_rtn_t.iloc[:, i] = df_rtn.T.sort_values(by=df_rtn.T.columns[i], ascending=False).iloc[:, i].reset_index(drop=True)
+        df_stk_t.iloc[:, i] = df_stk.iloc[i][
+            df_rtn.T.sort_values(by=df_rtn.T.columns[i], ascending=False).iloc[:, i].index].reset_index(drop=True)
+    df_rtn_t.columns = df_rtn_t.columns.strftime('%Y%m%d')
+    df_stk_t.columns = df_stk_t.columns.strftime('%Y%m%d')
+    df_rtn_t = round(df_rtn_t,3)
+    df_stk_t = round(df_stk_t, 3)
+    return df_rtn_t, df_stk_t
+
+df_rtn_t, df_stk_t = get_top_pick(num, start_date, end_date, tgt_n)
+
+
+
+# 5. 시각화
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 font_location = 'C:/Windows/Fonts/NanumGothic.ttf'
